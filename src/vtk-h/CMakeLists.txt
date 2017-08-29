@@ -121,7 +121,9 @@ install(TARGETS vtkh
 # Build Parallel (MPI) version of vtkh
 ################################################
 if(MPI_FOUND)
-    set(vtkh_par_sources
+    set(vtkh_par_headers
+        rendering/vtkh_image_compositor.hpp
+        rendering/compositing/vtkh_compositor.hpp
         rendering/compositing/vtkh_diy_collect.hpp
         rendering/compositing/vtkh_diy_compositor.hpp
         rendering/compositing/vtkh_diy_direct_send.hpp
@@ -129,9 +131,7 @@ if(MPI_FOUND)
         rendering/compositing/vtkh_diy_radix_k.hpp
         ) 
 
-    set(vtkh_par_headers
-        rendering/vtkh_renderer.cpp
-        rendering/vtkh_renderer_ray_tracer.cpp
+    set(vtkh_par_sources
         rendering/compositing/vtkh_diy_compositor.cpp
         rendering/compositing/vtkh_diy_direct_send.cpp
         rendering/compositing/vtkh_diy_radix_k.cpp
