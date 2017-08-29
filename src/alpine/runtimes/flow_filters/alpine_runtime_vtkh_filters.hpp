@@ -75,6 +75,9 @@ namespace runtime
 namespace filters
 {
 
+void write_log();
+void write_entry(std::string name, double time);
+
 //-----------------------------------------------------------------------------
 ///
 /// VTK-H Filters

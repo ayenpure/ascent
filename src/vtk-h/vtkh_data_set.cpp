@@ -229,7 +229,6 @@ DataSet::GetGlobalRange(const std::string &field_name) const
 {
   bool valid_field = true;
   const size_t num_domains = m_domains.size();
-
   vtkm::cont::ArrayHandle<vtkm::Range> range;
   vtkm::Id num_components = 0;
 

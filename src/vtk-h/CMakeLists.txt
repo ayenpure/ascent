@@ -137,12 +137,14 @@ if(MPI_FOUND)
         rendering/compositing/vtkh_diy_radix_k.cpp
         )
 
+    SET(CMAKE_CXX_FLAGS_PREVIOUS ${CMAKE_CXX_FLAGS})
+    SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${MPI_CXX_COMPILE_FLAGS} -D PARALLEL -fPIC" )
     blt_add_library(
         NAME        vtkh_par
         SOURCES     ${vtkh_sources} ${vtkh_par_sources}
         HEADERS     ${vtkh_par_headers} ${vtkh_headers}
         DEPENDS_ON  ${vtkh_thirdparty_libs} mpi icet)
-  
+    SET(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS_PREVIOUS}) 
     blt_add_target_compile_flags(TO vtkh_par FLAGS "-D PARALLEL")
   
     # install target for mpi ver

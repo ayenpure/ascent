@@ -79,7 +79,7 @@ if(MPI_FOUND)
     configure_file(run_kripke_simple_example.sh 
                    ${CMAKE_CURRENT_BINARY_DIR}/run_kripke_simple_example.sh
                    COPYONLY)
-    configure_file(alpine_actions.json ${CMAKE_CURRENT_BINARY_DIR}/alpine_actions.json COPYONLY)
+                 #configure_file(alpine_actions.json ${CMAKE_CURRENT_BINARY_DIR}/alpine_actions.json COPYONLY)
     configure_file(alpine_options.json ${CMAKE_CURRENT_BINARY_DIR}/alpine_options.json COPYONLY)
 
     if(OPENMP_FOUND)
@@ -92,7 +92,7 @@ if(MPI_FOUND)
     include_directories("tools")
 
 
-    set(kripke_par_deps alpine_par mpi)
+    set(kripke_par_deps alpine_par mpi vtkm)
     if(OPENMP_FOUND)
            list(APPEND kripke_par_deps openmp)
     endif()

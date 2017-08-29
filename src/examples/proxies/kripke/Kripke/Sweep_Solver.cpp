@@ -18,7 +18,8 @@
 
 #include <conduit_blueprint.hpp>
 #include <alpine.hpp>
-
+#include <vtkm/cont/Timer.h>
+#include <runtimes/flow_filters/alpine_runtime_vtkh_filters.hpp>
 using namespace conduit;
 using alpine::Alpine;
 static int count = 0;
@@ -40,7 +41,7 @@ void writeAlpineData(Alpine &alpine, Grid_Data *grid_data, int timeStep)
   for(int sdom_idx = 0; sdom_idx < grid_data->num_zone_sets; ++sdom_idx)
   {
     ALPINE_BLOCK_TIMER(COPY_DATA);
-    
+    vtkm::cont::Timer<> timer; 
     int sdom_id =  grid_data->zs_to_sdomid[sdom_idx];
     Subdomain &sdom = grid_data->subdomains[sdom_id];
     //create coords array
@@ -82,11 +83,17 @@ void writeAlpineData(Alpine &alpine, Grid_Data *grid_data, int timeStep)
     data["fields/phi/values"].set(conduit::DataType::float64(sdom.num_zones));
     conduit::float64 * phi_scalars = data["fields/phi/values"].value();
 
+    double min = 100000000000000;
+    double max = -10000000000000;
     // TODO can we do this with strides and not copy?
     for(int i = 0; i < sdom.num_zones; i++)
     {
       phi_scalars[i] = (*sdom.phi)(0,0,i);  
+      min = std::min(min, phi_scalars[i]);
+      max = std::max(max, phi_scalars[i]);
     } 
+    //std::cout<<"**** MIN "<<min<<" max "<<max<<"\n";
+    alpine::runtime::filters::write_entry("copy_data", timer.GetElapsedTime());
 
   }//each sdom
   
@@ -100,12 +107,36 @@ void writeAlpineData(Alpine &alpine, Grid_Data *grid_data, int timeStep)
   {
       CONDUIT_INFO("blueprint verify succeeded");
   }
-
   conduit::Node actions;   
   conduit::Node scenes;
-  scenes["s1/plots/p1/type"]         = "volume";
+
+  conduit::Node pipelines;
+  pipelines["pl1/f1/type"] = "clip";
+
+  //// filter knobs
+  conduit::Node &contour2_params = pipelines["pl1/f1/params"];
+  contour2_params["topology"] = "mesh";
+  contour2_params["sphere/center/x"] = 0.0;
+  contour2_params["sphere/center/y"] = 0.0;
+  contour2_params["sphere/center/z"] = 0.0;
+  contour2_params["sphere/radius"] = 1.0;
+  contour2_params["max_value"] = 7.0;
+
+  //pipelines["pl1/f1/type"] = "contour";
+  //conduit::Node &contour2_params = pipelines["pl1/f1/params"];
+  //contour2_params["field"] = "phi";
+  //contour2_params["iso_values"] = 5.0;
+  
+  conduit::Node &add_pipelines = actions.append();
+  add_pipelines["action"] = "add_pipelines";
+  add_pipelines["pipelines"] = pipelines;
+
+  scenes["s1/plots/p1/type"]         = "pseudocolor";
+  scenes["s1/plots/p1/pipeline"]     = "pl1";
   scenes["s1/plots/p1/params/field"] = "phi";
 
+  scenes["s1/plots/p2/type"]         = "volume";
+  scenes["s1/plots/p2/params/field"] = "phi";
 
   conduit::Node &add_plots = actions.append();
   add_plots["action"] = "add_scenes";
@@ -144,6 +175,7 @@ int SweepSolver (Grid_Data *grid_data, bool block_jacobi)
    
    {//alpine block timer
      ALPINE_BLOCK_TIMER(KRIPKE_MAIN_LOOP);
+     vtkm::cont::Timer<> timer;
     /*
      * Compute the RHS:  rhs = LPlus*S*L*psi + Q
      */
@@ -204,6 +236,7 @@ int SweepSolver (Grid_Data *grid_data, bool block_jacobi)
         }
       }
     }
+    alpine::runtime::filters::write_entry("sim_cycle", timer.GetElapsedTime());
    }//end main loop timing
     double part = grid_data->particleEdit();
     writeAlpineData(alpine, grid_data, iter);

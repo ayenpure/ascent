@@ -80,7 +80,8 @@
 #include <alpine_data_adapter.hpp>
 
 #endif
-
+#include <fstream>
+#include <vtkm/cont/Timer.h>
 using namespace conduit;
 using namespace std;
 
@@ -104,6 +105,30 @@ namespace runtime
 namespace filters
 {
 
+static std::stringstream log;
+template<typename T>
+void add_entry(std::string entry, T value)
+{
+#ifdef PARALLEL
+  if(vtkh::GetMPIRank() == 0) log<<entry<<" "<<value<<"\n";
+#endif
+}
+void write_entry(std::string name, double time)
+{
+  add_entry(name, time);
+}
+void write_log()
+{
+#ifdef PARALLEL
+  if(vtkh::GetMPIRank() == 0)
+  {
+    std::ofstream output;
+    output.open("alpine_timings.log");
+    output<<log.str();
+    output.close();
+  }
+#endif
+}
 
 //-----------------------------------------------------------------------------
 EnsureVTKH::EnsureVTKH()
@@ -131,6 +156,7 @@ EnsureVTKH::declare_interface(Node &i)
 void 
 EnsureVTKH::execute()
 {
+    vtkm::cont::Timer<> timer;
     if(input(0).check_type<Node>())
     {
         // convert from blueprint to vtk-h
@@ -155,6 +181,10 @@ EnsureVTKH::execute()
         ALPINE_ERROR("ensure_vtkh input must be a mesh blueprint "
                      "conforming conduit::Node, a vtk-m dataset, or vtk-h dataset");
     }
+#ifdef PARALLEL
+   MPI_Barrier(vtkh::GetMPIComm()); 
+#endif
+    add_entry("ensure_vtkh",timer.GetElapsedTime());
 }
 
 
@@ -202,6 +232,7 @@ VTKHVolumeTracer::verify_params(const conduit::Node &params,
 void 
 VTKHVolumeTracer::execute()
 {
+     vtkm::cont::Timer<> timer;
     if(!input(0).check_type<vtkh::DataSet>())
     {
         ALPINE_ERROR("vtkh_volumetracer input0 must be a vtk-h dataset");
@@ -236,6 +267,10 @@ VTKHVolumeTracer::execute()
     std::vector<vtkh::Render> *renders_ptr = new std::vector<vtkh::Render>();
     *renders_ptr = out_renders;
     set_output<std::vector<vtkh::Render>>(renders_ptr);
+#ifdef PARALLEL
+   MPI_Barrier(vtkh::GetMPIComm()); 
+#endif
+    add_entry("volume_tracer",timer.GetElapsedTime());
 }
 
 VTKHRayTracer::VTKHRayTracer()
@@ -281,6 +316,7 @@ VTKHRayTracer::verify_params(const conduit::Node &params,
 void 
 VTKHRayTracer::execute()
 {
+  vtkm::cont::Timer<> timer;
     if(!input(0).check_type<vtkh::DataSet>())
     {
         ALPINE_ERROR("vtkh_raytracer input0 must be a vtk-h dataset");
@@ -318,6 +354,10 @@ VTKHRayTracer::execute()
     std::vector<vtkh::Render> *renders_ptr = new std::vector<vtkh::Render>();
     *renders_ptr = out_renders;
     set_output<std::vector<vtkh::Render>>(renders_ptr);
+#ifdef PARALLEL
+   MPI_Barrier(vtkh::GetMPIComm()); 
+#endif
+    add_entry("ray_tracer",timer.GetElapsedTime());
 }
 
 
@@ -371,7 +411,7 @@ VTKHMarchingCubes::verify_params(const conduit::Node &params,
 void 
 VTKHMarchingCubes::execute()
 {
-
+  vtkm::cont::Timer<> timer;
     ALPINE_INFO("Marching the cubes!");
     if(!input(0).check_type<vtkh::DataSet>())
     {
@@ -400,6 +440,10 @@ VTKHMarchingCubes::execute()
     vtkh::DataSet *iso_output = marcher.GetOutput();
     
     set_output<vtkh::DataSet>(iso_output);
+#ifdef PARALLEL
+   MPI_Barrier(vtkh::GetMPIComm()); 
+#endif
+    add_entry("contour",timer.GetElapsedTime());
 }
 
 //-----------------------------------------------------------------------------
@@ -457,7 +501,7 @@ VTKHThreshold::verify_params(const conduit::Node &params,
 void 
 VTKHThreshold::execute()
 {
-
+    vtkm::cont::Timer<> timer;
     ALPINE_INFO("Thresholding!");
     
     if(!input(0).check_type<vtkh::DataSet>())
@@ -488,6 +532,10 @@ VTKHThreshold::execute()
     vtkh::DataSet *thresh_output = thresher.GetOutput();
     
     set_output<vtkh::DataSet>(thresh_output);
+#ifdef PARALLEL
+   MPI_Barrier(vtkh::GetMPIComm()); 
+#endif
+    add_entry("threshold",timer.GetElapsedTime());
 }
 
 
@@ -539,6 +587,7 @@ void
 DefaultRender::execute()
 {
 
+    vtkm::cont::Timer<> timer;
     ALPINE_INFO("We be default rendering!");
     
       
@@ -567,7 +616,6 @@ DefaultRender::execute()
         largest_dom_count = dom_count;
       }
     }
-    
     std::vector<vtkh::Render> *renders = new std::vector<vtkh::Render>();
     vtkh::Render render = vtkh::MakeRender<vtkh::RayTracer>(1024,
                                                             1024, 
@@ -577,6 +625,10 @@ DefaultRender::execute()
 
     renders->push_back(render); 
     set_output<std::vector<vtkh::Render>>(renders);
+#ifdef PARALLEL
+   MPI_Barrier(vtkh::GetMPIComm()); 
+#endif
+    add_entry("default_render",timer.GetElapsedTime());
 }
 
 //-----------------------------------------------------------------------------
@@ -624,7 +676,7 @@ VTKHClip::verify_params(const conduit::Node &params,
 void 
 VTKHClip::execute()
 {
-
+    vtkm::cont::Timer<> timer;
     ALPINE_INFO("We be clipping!");
     
     if(!input(0).check_type<vtkh::DataSet>())
@@ -652,12 +704,21 @@ VTKHClip::execute()
     center[2] = sphere["center/z"].as_float64();
     double radius = sphere["radius"].as_float64(); 
   
-    clipper.SetSphereClip(center, radius);
+    //clipper.SetSphereClip(center, radius);
+    center[0] = 0; 
+    center[1] = 0; 
+    center[2] = 0; 
+    double normal[3] = {0,-1,0};
+    clipper.SetPlaneClip(center, normal);
     clipper.Update();
 
     vtkh::DataSet *clip_output = clipper.GetOutput();
     
     set_output<vtkh::DataSet>(clip_output);
+#ifdef PARALLEL
+   MPI_Barrier(vtkh::GetMPIComm()); 
+#endif
+    add_entry("clip",timer.GetElapsedTime());
 }
 
 
@@ -945,6 +1006,7 @@ Scene::declare_interface(Node &i)
 void 
 Scene::execute()
 {
+  vtkm::cont::Timer<> timer;
     ALPINE_INFO("Creating a scene default renderer!");
     
     // inputs are bounds and set of domains
@@ -971,6 +1033,10 @@ Scene::execute()
     std::vector<vtkh::Render> *renders = new std::vector<vtkh::Render>();
     renders->push_back(render);
     set_output<std::vector<vtkh::Render> >(renders);
+#ifdef PARALLEL
+   MPI_Barrier(vtkh::GetMPIComm()); 
+#endif
+    add_entry("scene",timer.GetElapsedTime());
 }
 
 

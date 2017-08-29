@@ -77,6 +77,7 @@
 #include <vtkm/cont/cuda/ChooseCudaDevice.h>
 #endif
 
+#include <alpine_runtime_vtkh_filters.hpp>
 using namespace conduit;
 using namespace std;
 
@@ -183,7 +184,7 @@ AscentRuntime::Initialize(const conduit::Node &options)
 void
 AscentRuntime::Cleanup()
 {
-
+  alpine::runtime::filters::write_log();
 }
 
 //-----------------------------------------------------------------------------
